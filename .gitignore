@@ -1,0 +1,25 @@
+# General
+.DS_Store
+Thumbs.db
+*.log
+*.sqlite3
+*.db
+
+# Python / Flask (backend)
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.env
+
+# React (frontend)
+frontend/node_modules/
+frontend/build/
+frontend/.env
+
+# VSCode
+.vscode/
+.idea/
+
+# Other
+*.swp
+*.swo
