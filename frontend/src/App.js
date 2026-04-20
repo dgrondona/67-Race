@@ -1,21 +1,21 @@
-import { useEffect } from "react";
-import { socket } from "./socket";
+import { useState } from "react";
+import HandTracker from "./components/HandTracker";
 
 function App() {
-  useEffect(() => {
-    socket.on("connect", () => {
-      console.log("Connected to server");
-    });
-  }, []);
-
-  const sendMove = () => {
-    socket.emit("move");
-  };
+  const [wrist, setWrist] = useState(null);
 
   return (
     <div>
       <h1>67 Race</h1>
-      <button onClick={sendMove}>Move</button>
+
+      <HandTracker onWristMove={setWrist} />
+
+      {wrist && (
+        <div>
+          <p>X: {wrist.x.toFixed(2)}</p>
+          <p>Y: {wrist.y.toFixed(2)}</p>
+        </div>
+      )}
     </div>
   );
 }
