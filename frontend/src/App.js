@@ -1,5 +1,5 @@
 import { useState } from "react";
-import HandTracker from "./components/HandTracker";
+import HandTracker from "./components/camera/HandTracker";
 
 function App() {
   const [wrist, setWrist] = useState(null);

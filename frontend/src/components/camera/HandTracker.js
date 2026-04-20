@@ -4,7 +4,7 @@ import {
     FilesetResolver,
     DrawingUtils
 } from "@mediapipe/tasks-vision";
-import use67Counter from "../hooks/use67Counter";
+import use67Counter from "../../hooks/use67Counter";
 
 export default function HandTracker() {
     const videoRef = useRef(null);
