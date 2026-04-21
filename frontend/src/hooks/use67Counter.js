@@ -5,51 +5,66 @@ export default function use67Counter() {
 
   const state = useRef({
     left: {
+      y: null,
+      smoothY: null,
+      velocity: 0,
       lastDir: null,
       stage: 0
     },
     right: {
+      y: null,
+      smoothY: null,
+      velocity: 0,
       lastDir: null,
       stage: 0
     }
   });
 
-  const THRESHOLD = 0.02;
-
-  function getDirection(prevY, y) {
-    const diff = y - prevY;
-
-    if (Math.abs(diff) < THRESHOLD) return null;
-
-    return diff > 0 ? "down" : "up";
-  }
+  const SMOOTH_ALPHA = 0.25;   // lower = smoother but slower
+  const VEL_ALPHA = 0.3;       // velocity smoothing
+  const MIN_VELOCITY = 0.004;  // ignore jitter noise
 
   function updateWrist(side, y, inverted = false) {
     const s = state.current[side];
 
-    if (s.prevY === undefined) {
-      s.prevY = y;
+    if (s.smoothY === null) {
+      s.smoothY = y;
+      s.y = y;
       return;
     }
 
-    let dir = getDirection(s.prevY, y);
-    s.prevY = y;
+    s.smoothY =
+      SMOOTH_ALPHA * y + (1 - SMOOTH_ALPHA) * s.smoothY;
 
-    if (!dir) return;
+    const rawVelocity = s.smoothY - s.y;
 
-    // invert logic for right hand (your rule)
+    s.velocity =
+      VEL_ALPHA * rawVelocity + (1 - VEL_ALPHA) * s.velocity;
+
+    s.y = s.smoothY;
+
+    if (Math.abs(s.velocity) < MIN_VELOCITY) return;
+
+    let dir = s.velocity > 0 ? "down" : "up";
+
     if (inverted) {
       dir = dir === "up" ? "down" : "up";
     }
 
-    // STATE MACHINE (direction-change based)
+    // prevent rapid flip-flopping from noise
+    if (s.lastDir === dir) return;
+    s.lastDir = dir;
+
     if (s.stage === 0 && dir === "down") {
       s.stage = 1;
-    } else if (s.stage === 1 && dir === "up") {
+    } 
+    else if (s.stage === 1 && dir === "up") {
       s.stage = 2;
-    } else if (s.stage === 2 && dir === "down") {
+    } 
+    else if (s.stage === 2 && dir === "down") {
       s.stage = 3;
-    } else if (s.stage === 3 && dir === "up") {
+    } 
+    else if (s.stage === 3 && dir === "up") {
       s.stage = 0;
       setCount((c) => c + 1);
     }
