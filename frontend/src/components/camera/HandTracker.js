@@ -15,6 +15,8 @@ export default function HandTracker() {
 
   const { count, updateWrist } = use67Counter();
 
+  const MIN_VIS = 0.6;
+
   useEffect(() => {
     let stream;
 
@@ -68,9 +70,8 @@ export default function HandTracker() {
       if (results.landmarks && results.landmarks[0]) {
         const pose = results.landmarks[0];
 
-        // 🎯 LEFT WRIST (index 15)
         const leftWrist = pose[15];
-        if (leftWrist) {
+        if (leftWrist && leftWrist.visibility > MIN_VIS) {
           updateWrist("left", leftWrist.y, false);
 
           drawingUtils.drawLandmarks([leftWrist], {
@@ -79,9 +80,8 @@ export default function HandTracker() {
           });
         }
 
-        // 🎯 RIGHT WRIST (index 16)
         const rightWrist = pose[16];
-        if (rightWrist) {
+        if (rightWrist && rightWrist.visibility > MIN_VIS) {
           updateWrist("right", rightWrist.y, true);
 
           drawingUtils.drawLandmarks([rightWrist], {
@@ -126,7 +126,6 @@ export default function HandTracker() {
         }}
       />
 
-      {/* 🔢 COUNTER */}
       <div
         style={{
           position: "absolute",

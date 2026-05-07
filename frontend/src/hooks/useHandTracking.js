@@ -12,7 +12,7 @@ export default function useHandTracking(onResults) {
     });
 
     hands.setOptions({
-      maxNumHands: 1,
+      maxNumHands: 2,
       modelComplexity: 1,
       minDetectionConfidence: 1,
       minTrackingConfidence: 0.5,
