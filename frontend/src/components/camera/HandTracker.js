@@ -6,14 +6,14 @@ import {
 } from "@mediapipe/tasks-vision";
 import use67Counter from "../../hooks/use67Counter";
 
-export default function HandTracker() {
+export default function HandTracker({ userId }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
   const landmarkerRef = useRef(null);
   const animationRef = useRef(null);
 
-  const { count, updateWrist } = use67Counter();
+  const { count, updateWrist } = use67Counter(userId);
 
   const MIN_VIS = 0.6;
 
@@ -25,7 +25,7 @@ export default function HandTracker() {
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
       );
 
-      // 🔥 Pose instead of Hand
+      // Pose instead of Hand
       landmarkerRef.current = await PoseLandmarker.createFromOptions(vision, {
         baseOptions: {
           modelAssetPath:

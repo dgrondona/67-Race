@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { socket } from "../socket"
 
-export default function use67Counter() {
+export default function use67Counter(userId) {
   const [count, setCount] = useState(0);
 
   const state = useRef({
@@ -93,12 +93,19 @@ export default function use67Counter() {
     else if (s.stage === 2 && dir === "down") s.stage = 3;
     else if (s.stage === 3 && dir === "up") {
       s.stage = 0;
-      setCount(c => c + 1);
+      
+      setCount(c => {
+        const newCount = c + 1;
 
-      socket.emit("gesture_detected", {
-        room_id: "test",
-        user_id: "player1"
+        console.log("67 DETECTED")
+
+        socket.emit("gesture_detected", {
+          room_id: "test",
+          user_id: userId
       });
+
+      return newCount;
+    });
 
     }
   }

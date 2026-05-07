@@ -1,58 +1,49 @@
-from flask_socketio import join_room, emit
-from game.manager import GameManager
-import random
+from flask_socketio import emit, join_room
 
-game = GameManager()
+rooms = {}
 
 def register_socket_events(socketio):
 
-    # ─────────────────────────────
-    # JOIN ROOM
-    # ─────────────────────────────
+    @socketio.on("connect")
+    def handle_connect():
+        print("CLIENT CONNECTED")
+
     @socketio.on("join_room")
-    def join(data):
+    def handle_join(data):
+        print("JOIN ROOM:", data)
+
         room_id = data["room_id"]
         user_id = data["user_id"]
 
         join_room(room_id)
 
-        game.ensure_room(room_id)
-        game.add_player(room_id, user_id)
+        if room_id not in rooms:
+            rooms[room_id] = {}
 
-        emit("state_update", game.rooms[room_id], room=room_id)
+        if user_id not in rooms[room_id]:
+            rooms[room_id][user_id] = 0
 
-    # ─────────────────────────────
-    # START GAME (optional for now)
-    # ─────────────────────────────
-    @socketio.on("start_game")
-    def start(data):
-        room_id = data["room_id"]
+        emit("state_update", rooms[room_id], room=room_id)
 
-        game.ensure_room(room_id)
-        room = game.rooms[room_id]
-
-        room["status"] = "running"
-
-        emit("game_start", {}, room=room_id)
-
-    # ─────────────────────────────
-    # GESTURE EVENT (CORE GAME LOOP)
-    # ─────────────────────────────
     @socketio.on("gesture_detected")
-    def gesture(data):
+    def handle_gesture(data):
+        print("GESTURE:", data)
+
         room_id = data["room_id"]
         user_id = data["user_id"]
 
-        count = game.add_gesture(room_id, user_id)
+        if room_id not in rooms:
+            rooms[room_id] = {}
 
-        emit("player_update", {
-            "user_id": user_id,
-            "count": count
-        }, room=room_id)
+        if user_id not in rooms[room_id]:
+            rooms[room_id][user_id] = 0
 
-        winner = game.check_winner(room_id)
+        rooms[room_id][user_id] += 1
 
-        if winner:
-            emit("game_end", {
-                "winner": winner
-            }, room=room_id)
+        print("ROOM STATE:", rooms)
+
+        emit(
+            "state_update",
+            rooms[room_id],
+            room=room_id
+        )
