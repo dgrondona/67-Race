@@ -1,28 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { socket } from "./socket";
 import { API_BASE } from "./config";
-import HandTracker from "./components/camera/HandTracker";
+import { readJsonBody } from "./utils/http";
+import { generateRoomCode } from "./utils/roomCode";
+import { playCountdownTick, playGoSound, resumeAudioIfNeeded } from "./utils/sounds";
+import AppHeader from "./components/layout/AppHeader";
+import StatusBanner from "./components/common/StatusBanner";
+import AuthPanel from "./components/auth/AuthPanel";
+import LobbyBar from "./components/lobby/LobbyBar";
+import RoomPanel from "./components/room/RoomPanel";
+import CountdownOverlay from "./components/room/CountdownOverlay";
 import "./App.css";
 
-async function readJsonBody(response) {
-  const text = await response.text();
-  if (!text || !String(text).trim()) {
-    return { json: null, parseError: false, empty: true, text: "" };
-  }
-  try {
-    return { json: JSON.parse(text), parseError: false, empty: false, text };
-  } catch (e) {
-    return { json: null, parseError: true, empty: false, text };
-  }
-}
-
-function generateRoomCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let out = "";
-  for (let i = 0; i < 6; i++) {
-    out += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return out;
+function sortRaceResults(players) {
+  return [...players].sort((a, b) => {
+    const ta = a.race_time_sec;
+    const tb = b.race_time_sec;
+    if (ta != null && tb != null) return ta - tb;
+    if (ta != null) return -1;
+    if (tb != null) return 1;
+    return b.count - a.count;
+  });
 }
 
 function App() {
@@ -39,10 +37,37 @@ function App() {
   const [statusMessage, setStatusMessage] = useState("");
   const [roomTab, setRoomTab] = useState("current");
   const [roomPeek, setRoomPeek] = useState(null);
+  const [countdownPhase, setCountdownPhase] = useState(null);
   const targetScore = roomState?.target_score || 100;
   const maxPlayers = roomState?.max_players ?? 5;
   const pastGames = roomState?.past_games || [];
   const raceStatus = roomState?.status || "waiting";
+  const players = roomState?.players || [];
+  const myPlayer = players.find((player) => String(player.user_id) === String(user?.id));
+  const myCount = myPlayer?.count || 0;
+  const myReady = Boolean(myPlayer?.ready);
+  const isHost = roomState && String(roomState.host_id) === String(user?.id);
+  const allReady = players.length > 0 && players.every((p) => Boolean(p.ready));
+  const joinDisabled =
+    !roomIdInput.trim() ||
+    (roomPeek && roomPeek.exists === true && roomPeek.can_join === false);
+  const showStartRace = isHost;
+  const startRaceDisabled =
+    !isHost ||
+    !allReady ||
+    raceStatus === "racing" ||
+    raceStatus === "countdown";
+  const raceResultsRows = useMemo(
+    () => sortRaceResults(roomState?.players || []),
+    [roomState]
+  );
+  const winnerUsername = players.find((p) => String(p.user_id) === String(roomState?.winner_id))?.username;
+  const peekHint = (() => {
+    if (!roomIdInput.trim() || !roomPeek || !roomPeek.exists || roomPeek.can_join) return null;
+    if (roomPeek.status === "countdown") return "countdown in progress — join is locked until it finishes.";
+    if (roomPeek.status === "racing") return "race in progress — join is closed until this race ends.";
+    return null;
+  })();
 
   useEffect(() => {
     socket.on("room_state", (data) => {
@@ -75,6 +100,7 @@ function App() {
         if (cur && cur.toUpperCase() === id) {
           setRoomState(null);
           setRoomTab("current");
+          setCountdownPhase(null);
           setStatusMessage("lobby closed by host");
           return "";
         }
@@ -107,6 +133,33 @@ function App() {
     socket.on("room_peek", onPeek);
     return () => socket.off("room_peek", onPeek);
   }, [roomIdInput]);
+
+  useEffect(() => {
+    const rid = activeRoomId ? activeRoomId.toUpperCase() : "";
+    const onTick = (p) => {
+      if (!rid || String(p.room_id || "").toUpperCase() !== rid) return;
+      resumeAudioIfNeeded();
+      playCountdownTick();
+      setCountdownPhase(p.value);
+    };
+    const onGo = (p) => {
+      if (!rid || String(p.room_id || "").toUpperCase() !== rid) return;
+      resumeAudioIfNeeded();
+      playGoSound();
+      setCountdownPhase("go");
+      setTimeout(() => setCountdownPhase(null), 650);
+    };
+    socket.on("countdown_tick", onTick);
+    socket.on("countdown_go", onGo);
+    return () => {
+      socket.off("countdown_tick", onTick);
+      socket.off("countdown_go", onGo);
+    };
+  }, [activeRoomId]);
+
+  useEffect(() => {
+    setCountdownPhase(null);
+  }, [activeRoomId]);
 
   const handleAuth = async () => {
     setError("");
@@ -148,6 +201,7 @@ function App() {
     setIsGuest(false);
     setStatusMessage(authMode === "login" ? "logged in" : "signed up");
   };
+
   const handleGuest = async () => {
     setError("");
     let response;
@@ -212,6 +266,7 @@ function App() {
 
   const startRace = () => {
     if (!activeRoomId || !user) return;
+    resumeAudioIfNeeded();
     setError("");
     socket.emit("start_race", {
       room_id: activeRoomId,
@@ -227,6 +282,7 @@ function App() {
     });
     setActiveRoomId("");
     setRoomState(null);
+    setCountdownPhase(null);
     setStatusMessage("left lobby");
   };
 
@@ -239,216 +295,73 @@ function App() {
     });
   };
 
-  const players = roomState?.players || [];
-  const myPlayer = players.find((player) => String(player.user_id) === String(user?.id));
-  const myCount = myPlayer?.count || 0;
-  const isHost = roomState && String(roomState.host_id) === String(user?.id);
-  const joinDisabled =
-    !roomIdInput.trim() ||
-    (roomPeek && roomPeek.exists === true && roomPeek.can_join === false);
-  const showStartRace = isHost;
-  const startRaceDisabled = !isHost || raceStatus === "racing";
-  const peekHint = roomIdInput.trim() && roomPeek && roomPeek.exists && !roomPeek.can_join
-    ? "race in progress — join is closed until this race ends."
-    : null;
-
-  const resultsPlayers = [...players].sort((a, b) => {
-    const ta = a.race_time_sec;
-    const tb = b.race_time_sec;
-    if (ta != null && tb != null) return ta - tb;
-    if (ta != null) return -1;
-    if (tb != null) return 1;
-    return b.count - a.count;
-  });
+  const setReady = (ready) => {
+    if (!activeRoomId || !user) return;
+    socket.emit("set_ready", {
+      room_id: activeRoomId,
+      user_id: user.id,
+      ready
+    });
+  };
 
   return (
     <div className="app-root">
-      <header className="app-header">
-        <h1 className="app-title">67 Race</h1>
-        <p className="app-sub">
-          Who can 67 the fastest?
-        </p>
-      </header>
-
+      <AppHeader />
       <main className="app-main">
-        {statusMessage ? <p className="status-line">{statusMessage}</p> : null}
-        {error ? <div className="error-banner" role="alert">{error}</div> : null}
-
+        <StatusBanner statusMessage={statusMessage} error={error} />
         {!token && (
-          <section className="card">
-            <h2 className="card-title">{authMode === "login" ? "Log in" : "Create account"}</h2>
-            <div className="field-row">
-              <input
-                className="input"
-                placeholder="username"
-                autoComplete="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
-            <div className="field-row">
-              <input
-                className="input"
-                type="password"
-                placeholder="password"
-                autoComplete={authMode === "login" ? "current-password" : "new-password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <div className="btn-row">
-              <button type="button" className="btn btn-primary" onClick={handleAuth}>
-                {authMode === "login" ? "Log in" : "Sign up"}
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setAuthMode(authMode === "login" ? "signup" : "login")}>
-                {authMode === "login" ? "Need an account?" : "Have an account?"}
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={handleGuest}>Play as guest</button>
-            </div>
-          </section>
+          <AuthPanel
+            authMode={authMode}
+            username={username}
+            password={password}
+            onUsernameChange={setUsername}
+            onPasswordChange={setPassword}
+            onAuthModeToggle={() => setAuthMode(authMode === "login" ? "signup" : "login")}
+            onSubmit={handleAuth}
+            onGuest={handleGuest}
+          />
         )}
-
         {token && user && (
-          <section className="card">
-            <p className="room-meta" style={{ marginTop: 0 }}>
-              <strong style={{ color: "#f0f6fc" }}>{user.username}</strong>
-              {isGuest ? " · guest" : ""}
-            </p>
-            <div className="field-row">
-              <input
-                className="input"
-                placeholder="Room code (join a friend)"
-                value={roomIdInput}
-                onChange={(e) => setRoomIdInput(e.target.value.toUpperCase())}
-              />
-            </div>
-            {peekHint ? <p className="peek-hint">{peekHint}</p> : null}
-            <div className="btn-row">
-              <button type="button" className="btn btn-primary" onClick={hostLobby}>Host lobby</button>
-              <button type="button" className="btn btn-secondary" onClick={joinLobby} disabled={joinDisabled}>Join lobby</button>
-              <button type="button" className="btn btn-ghost" onClick={leaveLobby}>Leave</button>
-            </div>
-          </section>
+          <LobbyBar
+            username={user.username}
+            isGuest={isGuest}
+            roomIdInput={roomIdInput}
+            onRoomIdChange={setRoomIdInput}
+            peekHint={peekHint}
+            joinDisabled={joinDisabled}
+            onHost={hostLobby}
+            onJoin={joinLobby}
+            onLeave={leaveLobby}
+            leaveDisabled={!activeRoomId}
+          />
         )}
-
-        {activeRoomId && (
-          <section className="card">
-            <h2 className="card-title">Room {activeRoomId}</h2>
-            <p className="room-meta">Status: <strong style={{ color: "#e6edf3" }}>{raceStatus}</strong></p>
-            <p className="room-meta">Lobby: {players.length} / {maxPlayers}</p>
-            <p className="room-meta">Goal: {targetScore} 67s each. The run finishes when everyone hits the goal.</p>
-            <p className="score-highlight">Your score: {myCount} / {targetScore}</p>
-            <div className="btn-row">
-              {showStartRace ? (
-                <button type="button" className="btn btn-primary" onClick={startRace} disabled={startRaceDisabled}>
-                  Start race
-                </button>
-              ) : null}
-              {isHost ? (
-                <button type="button" className="btn btn-secondary" onClick={closeLobby}>Close lobby</button>
-              ) : null}
-            </div>
-
-            <div className="tabs" role="tablist">
-              <button type="button" role="tab" aria-selected={roomTab === "current"} className={`tab ${roomTab === "current" ? "tab-active" : ""}`} onClick={() => setRoomTab("current")}>Current race</button>
-              <button type="button" role="tab" aria-selected={roomTab === "past"} className={`tab ${roomTab === "past" ? "tab-active" : ""}`} onClick={() => setRoomTab("past")}>Past games</button>
-            </div>
-
-            {roomTab === "current" && (
-              <>
-                {raceStatus === "finished" && (
-                  <div style={{ marginTop: "1rem" }}>
-                    <h3 className="card-title" style={{ marginBottom: "0.5rem" }}>Last race stats</h3>
-                    <table className="stats-table">
-                      <thead>
-                        <tr>
-                          <th>Player</th>
-                          <th>Time (s)</th>
-                          <th>67s / sec</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {resultsPlayers.map((row) => (
-                          <tr key={row.user_id}>
-                            <td>
-                              {row.username}
-                              {String(row.user_id) === String(user?.id) ? " (you)" : ""}
-                            </td>
-                            <td>{row.race_time_sec != null ? row.race_time_sec : "—"}</td>
-                            <td>{row.sixty_sevens_per_sec != null ? row.sixty_sevens_per_sec : "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <p className="room-meta" style={{ marginTop: "0.75rem" }}>
-                      First across:{" "}
-                      <strong style={{ color: "#e6edf3" }}>
-                        {players.find((p) => String(p.user_id) === String(roomState?.winner_id))?.username || "—"}
-                      </strong>
-                    </p>
-                  </div>
-                )}
-                <div className="camera-wrap">
-                  <HandTracker
-                    userId={String(user?.id || "")}
-                    roomId={activeRoomId}
-                    raceStatus={raceStatus}
-                  />
-                </div>
-                <h3 className="card-title" style={{ marginTop: "1.25rem", marginBottom: "0.5rem" }}>Live standings</h3>
-                <ul className="player-list">
-                  {players.map((player) => (
-                    <li key={player.user_id}>
-                      <span>{player.username}</span>
-                      <span>
-                        {player.count}/{targetScore}
-                        {String(player.user_id) === String(roomState?.winner_id) ? " · first to finish" : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {roomTab === "past" && (
-              <div style={{ marginTop: "1rem" }}>
-                {pastGames.length === 0 ? (
-                  <p className="room-meta">No completed races in this lobby yet. Results are cleared when the lobby closes or the last person leaves.</p>
-                ) : (
-                  [...pastGames].reverse().map((game) => (
-                    <div key={game.race_index} className="past-game-block">
-                      <p className="room-meta" style={{ marginBottom: "0.5rem" }}>
-                        <strong>Race #{game.race_index}</strong>
-                        {" · "}
-                        winner:{" "}
-                        {(game.players || []).find((p) => String(p.user_id) === String(game.winner_id))?.username || "—"}
-                      </p>
-                      <table className="stats-table">
-                        <thead>
-                          <tr>
-                            <th>Player</th>
-                            <th>Time (s)</th>
-                            <th>67s / sec</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(game.players || []).map((row) => (
-                            <tr key={row.user_id}>
-                              <td>{row.username}</td>
-                              <td>{row.race_time_sec != null ? row.race_time_sec : "—"}</td>
-                              <td>{row.sixty_sevens_per_sec != null ? row.sixty_sevens_per_sec : "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </section>
+        {activeRoomId && user && (
+          <RoomPanel
+            activeRoomId={activeRoomId}
+            user={user}
+            raceStatus={raceStatus}
+            targetScore={targetScore}
+            maxPlayers={maxPlayers}
+            myCount={myCount}
+            isHost={isHost}
+            roomTab={roomTab}
+            onTabChange={setRoomTab}
+            onStartRace={startRace}
+            onCloseLobby={closeLobby}
+            startRaceDisabled={startRaceDisabled}
+            showStartRace={showStartRace}
+            players={players}
+            myReady={myReady}
+            onToggleReady={setReady}
+            allReady={allReady}
+            raceResultsRows={raceResultsRows}
+            winnerUsername={winnerUsername}
+            pastGames={pastGames}
+            winnerId={roomState?.winner_id}
+          />
         )}
       </main>
+      <CountdownOverlay phase={countdownPhase} />
     </div>
   );
 }

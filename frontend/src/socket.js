@@ -1,12 +1,22 @@
 import { io } from "socket.io-client";
 
 const SOCKET_OPTIONS = { transports: ["websocket", "polling"] };
-const SOCKET_URL =
-  process.env.REACT_APP_SOCKET_URL ||
-  (process.env.NODE_ENV === "development" ? null : "http://127.0.0.1:5000");
 
-export const socket = SOCKET_URL
-  ? io(SOCKET_URL, SOCKET_OPTIONS)
+function socketUrl() {
+  const fromEnv = process.env.REACT_APP_SOCKET_URL;
+  if (fromEnv != null && String(fromEnv).trim() !== "") {
+    return String(fromEnv).trim().replace(/\/$/, "");
+  }
+  if (process.env.NODE_ENV === "development") {
+    return null;
+  }
+  return typeof window !== "undefined" ? window.location.origin : "";
+}
+
+const url = socketUrl();
+
+export const socket = url
+  ? io(url, SOCKET_OPTIONS)
   : io(SOCKET_OPTIONS);
 
 socket.on("connect", () => {

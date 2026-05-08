@@ -1,10 +1,13 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 from flask import Flask
 from flask_socketio import SocketIO
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 
-from config import Config
+from config import Config, get_cors_origins, get_socketio_cors
 from db import db, apply_sqlite_user_migrations
 from auth.routes import auth_bp
 from game.socket_events import register_socket_events
@@ -20,11 +23,16 @@ db.init_app(app)
 bcrypt.init_app(app)
 jwt = JWTManager(app)
 
-CORS(app, origins="*")
+_cors = get_cors_origins()
+if _cors == "*":
+    CORS(app, resources={r"/*": {"origins": "*"}})
+else:
+    CORS(app, origins=_cors)
 
+_sock_cors = get_socketio_cors()
 socketio = SocketIO(
     app,
-    cors_allowed_origins="*",
+    cors_allowed_origins=_sock_cors,
     async_mode="threading"
 )
 
@@ -57,12 +65,13 @@ def home():
 
 
 if __name__ == "__main__":
-    print("SERVER STARTING ON http://localhost:5000")
+    _port = int(os.getenv("PORT", "5000"))
+    print("SERVER STARTING ON http://0.0.0.0:%s" % _port)
 
     socketio.run(
         app,
         host="0.0.0.0",
-        port=5000,
-        debug=True,
+        port=_port,
+        debug=os.getenv("FLASK_DEBUG", "1") == "1",
         use_reloader=False
     )

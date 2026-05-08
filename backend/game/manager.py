@@ -29,7 +29,7 @@ class GameManager:
         room = self.rooms.get(room_id)
         if not room:
             return {"exists": False, "can_join": False, "status": None}
-        can_join = room["status"] != "racing"
+        can_join = room["status"] not in ("racing", "countdown")
         return {
             "exists": True,
             "can_join": can_join,
@@ -48,8 +48,8 @@ class GameManager:
         if room_id not in self.rooms:
             return None, "room not found"
         room = self.rooms[room_id]
-        if room["status"] == "racing":
-            return None, "cannot join during a race"
+        if room["status"] in ("racing", "countdown"):
+            return None, "cannot join while a race is starting or in progress"
         err = self._add_player_to_room(room, user_id, username)
         if err:
             return None, err
@@ -65,9 +65,57 @@ class GameManager:
             "user_id": user_id,
             "username": username,
             "count": 0,
-            "finished_at": None
+            "finished_at": None,
+            "ready": False
         }
         return None
+
+    def set_player_ready(self, room_id, user_id, ready):
+        if room_id not in self.rooms:
+            return None, "room not found"
+        room = self.rooms[room_id]
+        if room["status"] not in ("waiting", "finished"):
+            return None, "cannot change ready right now"
+        user_id = str(user_id)
+        if user_id not in room["players"]:
+            return None, "not in this room"
+        room["players"][user_id]["ready"] = bool(ready)
+        return room, None
+
+    def validate_start_countdown(self, room_id, starter_id):
+        if room_id not in self.rooms:
+            return "room not found"
+        room = self.rooms[room_id]
+        if room["host_id"] != str(starter_id):
+            return "only host can start the race"
+        if not room["players"]:
+            return "no players in room"
+        if room["status"] in ("racing", "countdown"):
+            return "a race is already starting or running"
+        if room["status"] not in ("waiting", "finished"):
+            return "cannot start right now"
+        for pl in room["players"].values():
+            if not pl.get("ready"):
+                return "not everyone is ready yet"
+        return None
+
+    def begin_countdown(self, room_id):
+        room = self.rooms[room_id]
+        room["status"] = "countdown"
+        return room
+
+    def activate_race(self, room_id):
+        room = self.rooms.get(room_id)
+        if not room:
+            return None, "room not found"
+        room["status"] = "racing"
+        room["winner_id"] = None
+        room["started_at"] = time.time()
+        room["finished_at"] = None
+        for player in room["players"].values():
+            player["count"] = 0
+            player["finished_at"] = None
+        return room, None
 
     def remove_player(self, room_id, user_id):
         user_id = str(user_id)
@@ -95,23 +143,6 @@ class GameManager:
         del self.rooms[room_id]
         return True, None
 
-    def start_race(self, room_id, starter_id):
-        room = self.ensure_room(room_id)
-        if room["host_id"] != str(starter_id):
-            return None, "only host can start race"
-        if len(room["players"]) < 1:
-            return None, "no players in room"
-        if room["status"] == "racing":
-            return None, "race already in progress"
-        room["status"] = "racing"
-        room["winner_id"] = None
-        room["started_at"] = time.time()
-        room["finished_at"] = None
-        for player in room["players"].values():
-            player["count"] = 0
-            player["finished_at"] = None
-        return room, None
-
     def add_gesture(self, room_id, user_id, increment=1):
         room = self.ensure_room(room_id)
         user_id = str(user_id)
@@ -133,6 +164,8 @@ class GameManager:
         if room["status"] == "racing" and after_all_done and not before_all_done:
             room["status"] = "finished"
             room["finished_at"] = time.time()
+            for pl in room["players"].values():
+                pl["ready"] = False
             self._append_past_game(room)
             race_just_finished = True
         winner = room["winner_id"]
@@ -191,6 +224,7 @@ class GameManager:
         out_players = []
         for pl in players:
             row = dict(pl)
+            row.setdefault("ready", False)
             if started and room["status"] != "waiting":
                 if pl.get("finished_at"):
                     dur = max(pl["finished_at"] - started, 0.001)

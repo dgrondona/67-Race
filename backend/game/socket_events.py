@@ -1,3 +1,5 @@
+import time
+import threading
 from flask import request
 from flask_socketio import emit, join_room, leave_room
 from game.manager import GameManager
@@ -8,6 +10,27 @@ def _norm_room_id(room_id):
 def register_socket_events(socketio):
     game_manager = GameManager()
     socket_to_user = {}
+
+    def _countdown_then_race(room_id):
+        try:
+            for n in (3, 2, 1):
+                socketio.emit(
+                    "countdown_tick",
+                    {"value": n, "room_id": room_id},
+                    room=room_id
+                )
+                time.sleep(1)
+            if room_id not in game_manager.rooms:
+                return
+            room, err = game_manager.activate_race(room_id)
+            if err:
+                return
+            state = game_manager.get_room_state(room_id)
+            socketio.emit("countdown_go", {"room_id": room_id}, room=room_id)
+            socketio.emit("race_started", state, room=room_id)
+            socketio.emit("room_state", state, room=room_id)
+        except Exception as ex:
+            print("countdown error:", ex)
 
     @socketio.on("connect")
     def handle_connect():
@@ -57,6 +80,20 @@ def register_socket_events(socketio):
         socket_to_user[request.sid] = {"room_id": room_id, "user_id": user_id}
         emit("room_state", game_manager.get_room_state(room_id), room=room_id)
 
+    @socketio.on("set_ready")
+    def handle_set_ready(data):
+        room_id = _norm_room_id(data.get("room_id"))
+        user_id = str(data.get("user_id"))
+        ready = bool(data.get("ready"))
+        if not room_id or not user_id:
+            emit("room_error", {"message": "room_id and user_id are required"})
+            return
+        room, err = game_manager.set_player_ready(room_id, user_id, ready)
+        if err:
+            emit("room_error", {"message": err})
+            return
+        emit("room_state", game_manager.get_room_state(room_id), room=room_id)
+
     @socketio.on("peek_room")
     def handle_peek_room(data):
         room_id = _norm_room_id(data.get("room_id"))
@@ -100,12 +137,17 @@ def register_socket_events(socketio):
         if not room_id or not user_id:
             emit("room_error", {"message": "room_id and user_id are required"})
             return
-        room, error = game_manager.start_race(room_id, user_id)
-        if error:
-            emit("room_error", {"message": error})
+        err = game_manager.validate_start_countdown(room_id, user_id)
+        if err:
+            emit("room_error", {"message": err})
             return
-        emit("race_started", game_manager.get_room_state(room_id), room=room_id)
+        game_manager.begin_countdown(room_id)
         emit("room_state", game_manager.get_room_state(room_id), room=room_id)
+        threading.Thread(
+            target=_countdown_then_race,
+            args=(room_id,),
+            daemon=True
+        ).start()
 
     @socketio.on("leave_lobby")
     def handle_leave_lobby(data):
