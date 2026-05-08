@@ -6,14 +6,14 @@ import {
 } from "@mediapipe/tasks-vision";
 import use67Counter from "../../hooks/use67Counter";
 
-export default function HandTracker({ userId }) {
+export default function HandTracker({ userId, roomId, raceStatus }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
   const landmarkerRef = useRef(null);
   const animationRef = useRef(null);
 
-  const { count, updateWrist } = use67Counter(userId);
+  const { updateWrist } = use67Counter(userId, roomId, raceStatus);
 
   const MIN_VIS = 0.6;
 
@@ -125,19 +125,6 @@ export default function HandTracker({ userId }) {
           pointerEvents: "none"
         }}
       />
-
-      <div
-        style={{
-          position: "absolute",
-          top: 10,
-          left: 10,
-          fontSize: 28,
-          fontWeight: "bold",
-          color: "red"
-        }}
-      >
-        67: {count}
-      </div>
     </div>
   );
 }

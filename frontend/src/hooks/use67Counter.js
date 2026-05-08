@@ -1,13 +1,19 @@
 import { useRef, useState } from "react";
 import { socket } from "../socket"
 
-export default function use67Counter(userId) {
+export default function use67Counter(userId, roomId, raceStatus) {
   const [count, setCount] = useState(0);
 
   const state = useRef({
     left: createHandState(),
     right: createHandState()
   });
+  const roomRef = useRef(roomId);
+  const raceRef = useRef(raceStatus);
+  const userRef = useRef(userId);
+  roomRef.current = roomId;
+  raceRef.current = raceStatus;
+  userRef.current = userId;
 
   // ─────────────────────────────
   // CONFIG (MUST BE ABOVE FUNCTION)
@@ -99,10 +105,12 @@ export default function use67Counter(userId) {
 
         console.log("67 DETECTED")
 
-        socket.emit("gesture_detected", {
-          room_id: "test",
-          user_id: userId
-      });
+        if (roomRef.current && raceRef.current === "racing") {
+          socket.emit("gesture_detected", {
+            room_id: roomRef.current,
+            user_id: String(userRef.current)
+          });
+        }
 
       return newCount;
     });
