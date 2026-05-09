@@ -13,7 +13,7 @@ def register_socket_events(socketio):
 
     def _countdown_then_race(room_id):
         try:
-            for n in (3, 2, 1):
+            for n in (1, 2, 3):
                 socketio.emit(
                     "countdown_tick",
                     {"value": n, "room_id": room_id},
