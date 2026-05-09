@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_socketio import SocketIO
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
@@ -15,7 +15,8 @@ from utils.security import bcrypt
 
 print("APP BOOTING...")
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="build", static_url_path="")
+
 app.config.from_object(Config)
 
 # init extensions
@@ -60,8 +61,11 @@ init_database()
 
 
 @app.route("/")
-def home():
-    return "67 Race Server Running"
+def serve():
+    return send_from_directory(app.static_folder, "index.html")
+
+if __name__ == "__main__":
+    app.run(debug=True)
 
 
 if __name__ == "__main__":
