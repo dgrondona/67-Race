@@ -65,10 +65,6 @@ def serve():
     return send_from_directory(app.static_folder, "index.html")
 
 if __name__ == "__main__":
-    app.run(debug=True)
-
-
-if __name__ == "__main__":
     _port = int(os.getenv("PORT", "5000"))
     print("SERVER STARTING ON http://0.0.0.0:%s" % _port)
 
