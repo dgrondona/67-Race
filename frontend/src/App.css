@@ -426,3 +426,96 @@
   margin-top: 1rem;
   padding: 0.75rem;
 }
+
+.play-hub {
+  margin-bottom: 0.5rem;
+}
+
+.play-identity {
+  margin-bottom: 0.75rem;
+}
+
+.play-card .card-title {
+  margin-top: 0;
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #30363d;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 0.65rem 0.75rem;
+  border: none;
+  background: #161b22;
+  color: #8b949e;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mode-tab:hover {
+  color: #e6edf3;
+  background: #21262d;
+}
+
+.mode-tab-active {
+  background: #21262d;
+  color: #58a6ff;
+  box-shadow: inset 0 -2px 0 #388bfd;
+}
+
+.room-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.room-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+  color: #8b949e;
+}
+
+.room-badge-waiting,
+.room-badge-finished {
+  border-color: #388bfd;
+  color: #79c0ff;
+}
+
+.room-badge-racing,
+.room-badge-countdown {
+  border-color: #2ea043;
+  color: #7ee787;
+}
+
+.room-badge-rematch {
+  border-color: #d29922;
+  color: #e3b341;
+}
+
+.rematch-panel {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: rgba(210, 153, 34, 0.08);
+  border: 1px solid rgba(210, 153, 34, 0.35);
+  border-radius: 10px;
+}
+
+.mm-status {
+  margin-top: 0.5rem;
+}

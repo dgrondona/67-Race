@@ -7,14 +7,14 @@ import { playCountdownTick, playGoSound, resumeAudioIfNeeded } from "./utils/sou
 import AppHeader from "./components/layout/AppHeader";
 import StatusBanner from "./components/common/StatusBanner";
 import AuthPanel from "./components/auth/AuthPanel";
-import Rules from "./components/rules/Rules"; // added for Rules page
-import LobbyBar from "./components/lobby/LobbyBar";
+import PlayHub from "./components/play/PlayHub";
 import RoomPanel from "./components/room/RoomPanel";
 import CountdownOverlay from "./components/room/CountdownOverlay";
+import Rules from "./components/rules/Rules";
 import "./App.css";
 
 function sortRaceResults(players) {
-  return [...players].sort((a, b) => {
+  return [...(players || [])].sort((a, b) => {
     const ta = a.race_time_sec;
     const tb = b.race_time_sec;
     if (ta != null && tb != null) return ta - tb;
@@ -37,14 +37,19 @@ function App() {
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [roomTab, setRoomTab] = useState("current");
-  const [showRules, setShowRules] = useState(false); // added for Rules page
+  const [showRules, setShowRules] = useState(false);
   const [roomPeek, setRoomPeek] = useState(null);
   const [countdownPhase, setCountdownPhase] = useState(null);
+  const [playMode, setPlayMode] = useState("private");
+  const [inQueue, setInQueue] = useState(false);
+  const [queueLength, setQueueLength] = useState(0);
+  const [queuePosition, setQueuePosition] = useState(null);
   const targetScore = roomState?.target_score || 100;
   const maxPlayers = roomState?.max_players ?? 5;
-  const pastGames = roomState?.past_games || [];
+  const pastGames = roomState?.past_games;
   const raceStatus = roomState?.status || "waiting";
   const players = roomState?.players || [];
+  const isMatchmaking = Boolean(roomState?.is_matchmaking);
   const myPlayer = players.find((player) => String(player.user_id) === String(user?.id));
   const myCount = myPlayer?.count || 0;
   const myReady = Boolean(myPlayer?.ready);
@@ -53,19 +58,44 @@ function App() {
   const joinDisabled =
     !roomIdInput.trim() ||
     (roomPeek && roomPeek.exists === true && roomPeek.can_join === false);
-  const showStartRace = isHost;
+  const showStartRace = isHost || isMatchmaking;
   const startRaceDisabled =
-    !isHost ||
+    (!isHost && !isMatchmaking) ||
     !allReady ||
     raceStatus === "racing" ||
     raceStatus === "countdown";
+  const showCloseLobby = isHost && !isMatchmaking;
   const raceResultsRows = useMemo(
     () => sortRaceResults(roomState?.players || []),
     [roomState]
   );
-  const winnerUsername = players.find((p) => String(p.user_id) === String(roomState?.winner_id))?.username;
+  const lastPastGame = pastGames && pastGames.length ? pastGames[pastGames.length - 1] : null;
+  const statsWinnerFromPast = (lastPastGame?.players || []).find(
+    (p) => String(p.user_id) === String(lastPastGame?.winner_id)
+  )?.username;
+  const statsRows = useMemo(() => {
+    if (isMatchmaking && pastGames && pastGames.length) {
+      const last = pastGames[pastGames.length - 1];
+      return last?.players || [];
+    }
+    return raceResultsRows;
+  }, [isMatchmaking, pastGames, raceResultsRows]);
+  const showStatsBlock = useMemo(() => {
+    if (isMatchmaking) {
+      return (
+        (pastGames && pastGames.length > 0) &&
+        ["rematch", "waiting", "finished"].includes(raceStatus)
+      );
+    }
+    return raceStatus === "finished" && raceResultsRows.length > 0;
+  }, [isMatchmaking, pastGames, raceResultsRows.length, raceStatus]);
+  const statsWinnerName = isMatchmaking && statsWinnerFromPast
+    ? statsWinnerFromPast
+    : players.find((p) => String(p.user_id) === String(roomState?.winner_id))?.username;
+  const rematchSecondsLeft = roomState?.rematch_seconds_left;
   const peekHint = (() => {
     if (!roomIdInput.trim() || !roomPeek || !roomPeek.exists || roomPeek.can_join) return null;
+    if (roomPeek.status === "rematch") return "rematch vote in progress — you cannot join mid-phase.";
     if (roomPeek.status === "countdown") return "countdown in progress — join is locked until it finishes.";
     if (roomPeek.status === "racing") return "race in progress — join is closed until this race ends.";
     return null;
@@ -87,11 +117,40 @@ function App() {
     socket.on("room_error", (data) => {
       setError(data.message || "socket error");
     });
+    socket.on("matchmaking_queue", (data) => {
+      setQueueLength(data.queue_length ?? 0);
+      setQueuePosition(data.position);
+      setInQueue(data.position != null);
+    });
+    socket.on("match_found", (data) => {
+      const rid = (data.room_id || "").toUpperCase();
+      setInQueue(false);
+      setQueuePosition(null);
+      setActiveRoomId(rid);
+      setRoomIdInput(rid);
+      setPlayMode("private");
+      setStatusMessage("match found — joining lobby");
+    });
+    socket.on("kicked_from_room", (data) => {
+      const rid = (data.room_id || "").toUpperCase();
+      setActiveRoomId((cur) => {
+        if (cur && cur.toUpperCase() === rid) {
+          setRoomState(null);
+          setCountdownPhase(null);
+          setStatusMessage("removed from lobby (no rematch choice)");
+          return "";
+        }
+        return cur;
+      });
+    });
     return () => {
       socket.off("room_state");
       socket.off("race_started");
       socket.off("race_finished");
       socket.off("room_error");
+      socket.off("matchmaking_queue");
+      socket.off("match_found");
+      socket.off("kicked_from_room");
     };
   }, []);
 
@@ -103,7 +162,7 @@ function App() {
           setRoomState(null);
           setRoomTab("current");
           setCountdownPhase(null);
-          setStatusMessage("lobby closed by host");
+          setStatusMessage("lobby closed");
           return "";
         }
         return cur;
@@ -287,8 +346,14 @@ function App() {
     setCountdownPhase(null);
     setStatusMessage("left lobby");
   };
+
   const backToHome = () => {
-    if (activeRoomId) {
+    if (inQueue && user) {
+      socket.emit("leave_matchmaking_queue", { user_id: user.id });
+      setInQueue(false);
+      setQueuePosition(null);
+    }
+    if (activeRoomId && user) {
       socket.emit("leave_lobby", {
         room_id: activeRoomId,
         user_id: user.id
@@ -297,12 +362,12 @@ function App() {
     setActiveRoomId("");
     setRoomState(null);
     setCountdownPhase(null);
-    setRoomIdInput(""); // clears lobby code when you click onBacktoHome btn
+    setRoomIdInput("");
     setToken("");
     setUser(null);
     setUsername("");
     setPassword("");
-    setStatusMessage("back to home");
+    setStatusMessage("logged out");
   };
 
   const closeLobby = () => {
@@ -320,6 +385,40 @@ function App() {
       room_id: activeRoomId,
       user_id: user.id,
       ready
+    });
+  };
+
+  const joinMatchmaking = () => {
+    if (!user) return;
+    setError("");
+    socket.emit("join_matchmaking_queue", {
+      user_id: user.id,
+      username: user.username || `user_${user.id}`
+    });
+  };
+
+  const leaveMatchmaking = () => {
+    if (!user) return;
+    socket.emit("leave_matchmaking_queue", { user_id: user.id });
+    setInQueue(false);
+    setQueuePosition(null);
+  };
+
+  const rematchContinue = () => {
+    if (!activeRoomId || !user) return;
+    socket.emit("rematch_vote", {
+      room_id: activeRoomId,
+      user_id: user.id,
+      continue: true
+    });
+  };
+
+  const rematchLeave = () => {
+    if (!activeRoomId || !user) return;
+    socket.emit("rematch_vote", {
+      room_id: activeRoomId,
+      user_id: user.id,
+      continue: false
     });
   };
 
@@ -342,9 +441,11 @@ function App() {
           />
         )}
         {token && user && (
-          <LobbyBar
+          <PlayHub
             username={user.username}
             isGuest={isGuest}
+            playMode={playMode}
+            onPlayModeChange={setPlayMode}
             roomIdInput={roomIdInput}
             onRoomIdChange={setRoomIdInput}
             peekHint={peekHint}
@@ -354,6 +455,11 @@ function App() {
             onLeave={leaveLobby}
             onBackToHome={backToHome}
             leaveDisabled={!activeRoomId}
+            inQueue={inQueue}
+            queueLength={queueLength}
+            queuePosition={queuePosition}
+            onJoinQueue={joinMatchmaking}
+            onLeaveQueue={leaveMatchmaking}
           />
         )}
         {activeRoomId && user && (
@@ -365,25 +471,31 @@ function App() {
             maxPlayers={maxPlayers}
             myCount={myCount}
             isHost={isHost}
+            isMatchmaking={isMatchmaking}
             roomTab={roomTab}
             onTabChange={setRoomTab}
             onStartRace={startRace}
             onCloseLobby={closeLobby}
             startRaceDisabled={startRaceDisabled}
             showStartRace={showStartRace}
+            showCloseLobby={showCloseLobby}
             players={players}
             myReady={myReady}
             onToggleReady={setReady}
             allReady={allReady}
-            raceResultsRows={raceResultsRows}
-            winnerUsername={winnerUsername}
-            pastGames={pastGames}
+            statsRows={statsRows}
+            statsWinnerName={statsWinnerName}
+            showStatsBlock={showStatsBlock}
+            pastGames={pastGames || []}
             winnerId={roomState?.winner_id}
+            rematchSecondsLeft={rematchSecondsLeft}
+            onRematchContinue={rematchContinue}
+            onRematchLeave={rematchLeave}
           />
         )}
       </main>
       <CountdownOverlay phase={countdownPhase} />
-      {showRules && <Rules onClose={() => setShowRules(false)}/>}
+      {showRules && <Rules onClose={() => setShowRules(false)} />}
     </div>
   );
 }
