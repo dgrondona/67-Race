@@ -39,7 +39,7 @@ export default function AuthPanel({
           {authMode === "login" ? "Need an account?" : "Have an account?"}
         </button>
         <button type="button" className="btn btn-ghost" onClick={onGuest}>Play as guest</button>
-        <button type="button" className="btn btn-ghost" onClick={onShowRules}>📖 Rules & Info</button>
+        <button type="button" className="btn btn-ghost" onClick={onShowRules}>About</button>
       </div>
     </section>
   );
