@@ -324,4 +324,41 @@
 .ready-row {
   margin-bottom: 0.35rem;
 }
-
+/*UI AuthPanel adjustments*/
+.auth-panel .field-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+.auth-panel .input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 0.85rem;
+  font-size: 1rem;
+}
+.auth-panel .card-title {
+  font-size: 1.5rem;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+.auth-panel .btn-row {
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+.auth-panel .btn {
+  width: 100%;
+  text-align: center;
+  padding: 0.7rem;
+  font-size: 0.95rem;
+}
+.auth-panel .btn-ghost {
+  background: rgba(110, 118, 129, 0.1);
+  border-color: #6e7681;
+}
+.auth-panel .btn-ghost:hover {
+  background: rgba(110, 118, 129, 0.2);
+  border-color: #8b949e;
+  color: #fff;
+}

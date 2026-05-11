@@ -9,7 +9,7 @@ export default function AuthPanel({
   onGuest
 }) {
   return (
-    <section className="card">
+    <section className="card auth-panel">
       <h2 className="card-title">{authMode === "login" ? "Log in" : "Create account"}</h2>
       <div className="field-row">
         <input
