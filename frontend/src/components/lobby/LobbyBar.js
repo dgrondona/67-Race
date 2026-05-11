@@ -8,6 +8,7 @@ export default function LobbyBar({
   onHost,
   onJoin,
   onLeave,
+  onBackToHome,
   leaveDisabled
 }) {
   return (
@@ -29,6 +30,7 @@ export default function LobbyBar({
         <button type="button" className="btn btn-primary" onClick={onHost}>Host lobby</button>
         <button type="button" className="btn btn-secondary" onClick={onJoin} disabled={joinDisabled}>Join lobby</button>
         <button type="button" className="btn btn-ghost" onClick={onLeave} disabled={leaveDisabled}>Leave</button>
+        <button type="button" className="btn btn-ghost" onClick={onBackToHome}>Return to Login</button>
       </div>
     </section>
   );

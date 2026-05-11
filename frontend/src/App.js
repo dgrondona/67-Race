@@ -287,6 +287,23 @@ function App() {
     setCountdownPhase(null);
     setStatusMessage("left lobby");
   };
+  const backToHome = () => {
+    if (activeRoomId) {
+      socket.emit("leave_lobby", {
+        room_id: activeRoomId,
+        user_id: user.id
+      });
+    }
+    setActiveRoomId("");
+    setRoomState(null);
+    setCountdownPhase(null);
+    setRoomIdInput(""); // clears lobby code when you click onBacktoHome btn
+    setToken("");
+    setUser(null);
+    setUsername("");
+    setPassword("");
+    setStatusMessage("back to home");
+  };
 
   const closeLobby = () => {
     if (!activeRoomId || !user) return;
@@ -335,6 +352,7 @@ function App() {
             onHost={hostLobby}
             onJoin={joinLobby}
             onLeave={leaveLobby}
+            onBackToHome={backToHome}
             leaveDisabled={!activeRoomId}
           />
         )}
