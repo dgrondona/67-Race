@@ -362,3 +362,67 @@
   border-color: #8b949e;
   color: #fff;
 }
+/*Rules/Description page*/
+/* Rules Modal Styles */
+.rules-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.rules-card {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 20px;
+  padding: 2rem;
+  max-width: 550px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: #e6edf3;
+}
+
+.rules-card h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 1.6rem;
+  background: linear-gradient(135deg, #7ee787, #79c0ff);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.rules-section {
+  margin-bottom: 1.5rem;
+}
+
+.rules-section h3 {
+  color: #79c0ff;
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.rules-section p, .rules-section li {
+  color: #c9d1d9;
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+.rules-section ul, .rules-section ol {
+  padding-left: 1.2rem;
+  margin: 0.5rem 0;
+}
+
+.rules-card .btn {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.75rem;
+}

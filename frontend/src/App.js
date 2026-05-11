@@ -7,6 +7,7 @@ import { playCountdownTick, playGoSound, resumeAudioIfNeeded } from "./utils/sou
 import AppHeader from "./components/layout/AppHeader";
 import StatusBanner from "./components/common/StatusBanner";
 import AuthPanel from "./components/auth/AuthPanel";
+import Rules from "./components/rules/Rules"; // added for Rules page
 import LobbyBar from "./components/lobby/LobbyBar";
 import RoomPanel from "./components/room/RoomPanel";
 import CountdownOverlay from "./components/room/CountdownOverlay";
@@ -36,6 +37,7 @@ function App() {
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [roomTab, setRoomTab] = useState("current");
+  const [showRules, setShowRules] = useState(false); // added for Rules page
   const [roomPeek, setRoomPeek] = useState(null);
   const [countdownPhase, setCountdownPhase] = useState(null);
   const targetScore = roomState?.target_score || 100;
@@ -319,6 +321,7 @@ function App() {
             onAuthModeToggle={() => setAuthMode(authMode === "login" ? "signup" : "login")}
             onSubmit={handleAuth}
             onGuest={handleGuest}
+            onShowRules={() => setShowRules(true)}
           />
         )}
         {token && user && (
@@ -362,6 +365,7 @@ function App() {
         )}
       </main>
       <CountdownOverlay phase={countdownPhase} />
+      {showRules && <Rules onClose={() => setShowRules(false)}/>}
     </div>
   );
 }
